@@ -2,129 +2,108 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function index(){
-        $products = [
-            ["id" => 1, "name" => "Café", "amount" => 10],
-            ["id" => 2, "name" => "Pizza", "amount" => 3],
-            ["id" => 3, "name" => "Energético", "amount" => 6]
-        ];
+    /**
+     * Display a listing of the resource.
+     */
+    public function index()
+    {
+        $products = Product::with('category')->get(); // Exibe todos os produtos
+        return view('products.index', compact('products'));    }
 
-        return view('products.index', compact('products'));
+    /**
+     * Show the form for creating a new resource.
+     */
+    public function create()
+    {
+        $categories = Category::all(); // Exibe as categorias para o vendedor selecionar
+        return view('products.create', compact('categories'));
     }
 
-    public function create(){
-        return view('products.create');
-    }
-
-    public function store(Request $request){
-        
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
         $request->validate([
             'name' => 'required|string|max:255',
-            'amount' => 'required|integer',
+            'category_id' => 'required|exists:categories,id',
+            // Outros campos do produto
         ]);
 
-        $products = [
-            ["id" => 1, "name" => "Café", "amount" => 10],
-            ["id" => 2, "name" => "Pizza", "amount" => 3],
-            ["id" => 3, "name" => "Energético", "amount" => 6]
-        ];
+        $product = Product::create([
+            'name' => $request->name,
+            'category_id' => $request->category_id,
+            // Outros campos
+        ]);
 
-        $nextId = count($products) + 1;
-
-        $user = [
-            "id" => $nextId,
-            "name" => $request->input('name'),
-            "amount" => $request->input('amount')
-        ];
-    
-        $this->products[] = $user;
-
-        return redirect()->route('products.index')->with('success', 'Produto criado.');
+        return redirect()->route('products.index');
     }
 
-    public function show($id)
+    /**
+     * Display the specified resource.
+     */
+    public function show(Product $product)
     {
-        $products = [
-            ["id" => 1, "name" => "Café", "amount" => 10],
-            ["id" => 2, "name" => "Pizza", "amount" => 3],
-            ["id" => 3, "name" => "Energético", "amount" => 6]
-        ];
-
-        $product = collect($products)->firstWhere('id', $id);
-    
-        if (!$product) {
-            abort(404);
-        }
-    
+        $product = Product::with(['category', 'productOffers.seller'])->findOrFail($id);
         return view('products.show', compact('product'));
     }
 
-    public function edit($id)
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(Product $product)
     {
-        $products = [
-            ["id" => 1, "name" => "Café", "amount" => 10],
-            ["id" => 2, "name" => "Pizza", "amount" => 3],
-            ["id" => 3, "name" => "Energético", "amount" => 6]
-        ];
-    
-        $product = null;
-        foreach ($products as $p) {
-            if ($p['id'] == $id) {
-                $product = $p;
-                break;
-            }
+        // Verifica se o usuário logado é o vendedor do produto
+        if ($product->user_id !== auth()->id()) {
+            abort(403); // Caso contrário, aborta com erro 403 (proibido)
         }
-    
-        if ($product === null) {
-            return redirect()->route('products.index')->with('error', 'Produto não encontrado.');
-        }
-    
-        return view('products.edit', compact('product'));
-    }
-    
 
-    public function update(Request $request, $id)
+        $categories = Category::all();
+        return view('products.edit', compact('product', 'categories'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, Product $product)
     {
+        // Verifica se o usuário logado é o vendedor do produto
+        if ($product->user_id !== auth()->id()) {
+            abort(403); // Caso contrário, aborta com erro 403 (proibido)
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
-            'amount' => 'required|integer',
+            'category_id' => 'required|exists:categories,id',
+            // Outros campos do produto
         ]);
 
-        $products = [
-            ["id" => 1, "name" => "Café", "amount" => 10],
-            ["id" => 2, "name" => "Pizza", "amount" => 3],
-            ["id" => 3, "name" => "Energético", "amount" => 6]
-        ];
+        $product->update([
+            'name' => $request->name,
+            'category_id' => $request->category_id,
+            // Outros campos
+        ]);
 
-        foreach ($products as &$product) {
-            if ($product['id'] == $id) {
-                $product['name'] = $request->name;
-                $product['amount'] = $request->amount;
-                break;
-            }
-        }
-
-        return redirect()->route('users.index')->with('success', 'Produto atualizado.');
+        return redirect()->route('products.index');
     }
 
-    public function destroy($id)
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(Product $product)
     {
-        $products = [
-            ["id" => 1, "name" => "Café", "amount" => 10],
-            ["id" => 2, "name" => "Pizza", "amount" => 3],
-            ["id" => 3, "name" => "Energético", "amount" => 6]
-        ];
+        // Verifica se o usuário logado é o vendedor do produto
+        if ($product->user_id !== auth()->id()) {
+            abort(403); // Caso contrário, aborta com erro 403 (proibido)
+        }
 
-        $products = array_filter($products, function($product) use ($id) {
-            return $product['id'] != $id;
-        });
+        $product->delete();
 
-        $products = array_values($products);
-
-        return redirect()->route('products.index')->with('warning', 'Produto deletado');
+        return redirect()->route('products.index');
     }
 }
